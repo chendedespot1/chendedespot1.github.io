@@ -3,9 +3,9 @@
      const _win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
      const HACK_CONFIG = {
          'HoverChassisParams.tiltStabilityScale': 61.47483647,
-         'HorizontalAimingParams.angleStep': 0.003899,
-         'VerticalAimingParams.elevationAngleUp': 0.003861,
-         'VerticalAimingParams.elevationAngleDown': 0.003861
+         'HorizontalAimingParams.angleStep': 0.003999,
+         'VerticalAimingParams.elevationAngleUp': 0.403861,
+         'VerticalAimingParams.elevationAngleDown': 0.403861
      };
      console.log('%c 悬稳+自瞄已启动', 'background: #000; color: #76FF33; font-size: 14px; font-weight: bold;');
      const TankCore = {
