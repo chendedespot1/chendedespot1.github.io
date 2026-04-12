@@ -1,18 +1,154 @@
-(function () {
+ (function () {
      'use strict';
      const _win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
      const HACK_CONFIG = {
          'HoverChassisParams.tiltStabilityScale': 61.47483647,
-         'HorizontalAimingParams.angleStep': 0.003999,
-         'VerticalAimingParams.elevationAngleUp': 0.403861,
-         'VerticalAimingParams.elevationAngleDown': 0.403861
+         'HorizontalAimingParams.angleStep': 0.004999,
+         'VerticalAimingParams.elevationAngleUp': 0.453861,
+         'VerticalAimingParams.elevationAngleDown': 0.453861,
+         'Weapon.CommonCC.impactForce': 0.100483647
      };
-     console.log('%c 悬稳+自瞄已启动', 'background: #000; color: #76FF33; font-size: 14px; font-weight: bold;');
+     let panelConfig = { ...HACK_CONFIG };
+     let panelExpanded = false;
+     console.log('%c 悬稳+自瞄+微冲击已启动', 'background: #000; color: #76FF33; font-size: 14px; font-weight: bold;');
+     function createPanel() {
+         const panel = document.createElement('div');
+         panel.id = 'tank-hack-panel';
+         panel.style.cssText = `
+             position: fixed;
+             top: 20px;
+             left: 20px;
+             transform: none;
+             width: 38px;
+             height: 38px;
+             border-radius: 50%;
+             background: rgba(0,0,0,0.2);
+             border: 1px solid rgba(118,255,51,0.3);
+             z-index: 999999;
+             cursor: pointer;
+             transition: all 0.2s ease;
+             overflow: hidden;
+             pointer-events: auto;
+         `;
+         const content = document.createElement('div');
+         content.style.cssText = `
+             display: none;
+             padding: 10px;
+             color: #fff;
+             font-size: 12px;
+             user-select: none;
+             font-family: sans-serif;
+             position: relative;
+         `;
+         const closeBtn = document.createElement('div');
+         closeBtn.innerText = '×';
+         closeBtn.style.cssText = `
+             position: absolute;
+             top: 4px;
+             right: 8px;
+             font-size: 16px;
+             color: #fff;
+             cursor: pointer;
+             width: 20px;
+             height: 20px;
+             line-height: 20px;
+             text-align: center;
+         `;
+         content.appendChild(closeBtn);
+         closeBtn.addEventListener('click', (e) => {
+             e.stopPropagation();
+             panelExpanded = false;
+             panel.style.width = '38px';
+             panel.style.height = '38px';
+             panel.style.left = '20px';
+             panel.style.top = '20px';
+             panel.style.transform = 'none';
+             panel.style.borderRadius = '50%';
+             panel.style.background = 'rgba(0,0,0,0.2)';
+             content.style.display = 'none';
+         });
+         function addItem(key, label, min, max, step) {
+             const wrap = document.createElement('div');
+             wrap.style.margin = '3px 0';
+             const text = document.createElement('div');
+             text.style.display = 'flex';
+             text.style.justifyContent = 'space-between';
+             text.style.fontSize = '11px';
+             text.innerText = label;
+             const val = document.createElement('span');
+             val.innerText = panelConfig[key].toFixed(6);
+             text.appendChild(val);
+             wrap.appendChild(text);
+             const slider = document.createElement('input');
+             slider.type = 'range';
+             slider.min = min;
+             slider.max = max;
+             slider.step = step;
+             slider.value = panelConfig[key];
+             slider.style.width = '100%';
+             slider.style.height = '6px';
+             slider.oninput = () => {
+                 panelConfig[key] = parseFloat(slider.value);
+                 val.innerText = panelConfig[key].toFixed(6);
+             };
+             wrap.appendChild(slider);
+             content.appendChild(wrap);
+         }
+         addItem('HoverChassisParams.tiltStabilityScale', '悬浮稳定', 10, 100, 0.1);
+         addItem('HorizontalAimingParams.angleStep', '扇形', 0.001, 0.01, 0.0001);
+         addItem('VerticalAimingParams.elevationAngleUp', '仰角', 0.1, 1.0, 0.0001);
+         addItem('VerticalAimingParams.elevationAngleDown', '俯角', 0.1, 1.0, 0.0001);
+         addItem('Weapon.CommonCC.impactForce', '微冲击（暂不可用）', 0.05, 0.5, 0.001);
+         panel.appendChild(content);
+         document.body.appendChild(panel);
+         panel.addEventListener('click', () => {
+             if (panelExpanded) return;
+             panelExpanded = true;
+             panel.style.width = '260px';
+             panel.style.height = 'auto';
+             panel.style.left = '20px';
+             panel.style.top = '20px';
+             panel.style.transform = 'none';
+             panel.style.borderRadius = '8px';
+             panel.style.background = 'rgba(0,0,0,0.4)';
+             content.style.display = 'block';
+         });
+         panel.addEventListener('dblclick', () => {
+             panelExpanded = false;
+             panel.style.width = '38px';
+             panel.style.height = '38px';
+             panel.style.left = '20px';
+             panel.style.top = '20px';
+             panel.style.transform = 'none';
+             panel.style.borderRadius = '50%';
+             panel.style.background = 'rgba(0,0,0,0.2)';
+             content.style.display = 'none';
+         });
+         let isDragging = false, ox = 0, oy = 0;
+         panel.addEventListener('mousedown', e => {
+             isDragging = true;
+             ox = e.clientX - panel.getBoundingClientRect().left;
+             oy = e.clientY - panel.getBoundingClientRect().top;
+             e.stopPropagation();
+         });
+         document.addEventListener('mousemove', e => {
+             if (!isDragging) return;
+             panel.style.left = e.clientX - ox + 'px';
+             panel.style.top = e.clientY - oy + 'px';
+             panel.style.transform = 'none';
+         });
+         document.addEventListener('mouseup', () => {
+             isDragging = false;
+         });
+     }
      const TankCore = {
          runtimeHacks: {},
-         init: function() {
+         init: function () {
              this.runScan();
-             window.addEventListener('load', () => this.runScan());
+             window.addEventListener('load', () => {
+                 this.runScan();
+                 createPanel();
+             });
              const interval = setInterval(() => {
                  const foundCount = Object.keys(this.runtimeHacks).length;
                  const targetCount = Object.keys(HACK_CONFIG).length;
@@ -24,26 +160,26 @@
                  }
              }, 2000);
          },
-         applyHook: function(obfName, targetKey, targetVal) {
+         applyHook: function (obfName, targetKey, targetVal) {
              if (this.runtimeHacks[obfName]) return;
              this.runtimeHacks[obfName] = true;
-             console.log(`%c锁定: ${targetKey}`, 'color: #00D4FF; font-weight: bold;');
+             console.log(`%c锁定: ${targetKey}`, 'color: #00D4FF; font-weight: bold');
              try {
                  Object.defineProperty(_win.Object.prototype, obfName, {
-                     get: () => targetVal,
-                     set: function() {},
+                     get: () => panelConfig[targetKey],
+                     set: function () {},
                      enumerable: false,
                      configurable: true
                  });
              } catch (e) {}
          },
-         fetchAndParseScripts: async function() {
+         fetchAndParseScripts: async function () {
              let codes = [];
              document.querySelectorAll('script:not([src])').forEach(s => codes.push(s.innerHTML));
              let scriptTags = document.querySelectorAll('script[src]');
-             for(let s of scriptTags) {
-                 if(s.src.includes('analytics') || s.src.includes('google') || s.src.includes('yandex')) continue;
-                 try { codes.push(await (await fetch(s.src)).text()); } catch(e){}
+             for (let s of scriptTags) {
+                 if (s.src.includes('analytics') || s.src.includes('google') || s.src.includes('yandex')) continue;
+                 try { codes.push(await (await fetch(s.src)).text()); } catch (e) {}
              }
              let results = [];
              codes.forEach(code => {
@@ -58,9 +194,9 @@
                  while ((match = classRegex.exec(code)) !== null) {
                      let cls = match[1];
                      let params = match[2];
-                     const paramRegex = /([a-zA-Z0-9_$]+)\s*=\s*["']?\s*\+\s*(?:[a-zA-Z0-9_$]+\()?this\.([a-zA-Z0-9_$]+)/g;
+                     const paramRegex = /([a-zA-Z0-9_$]+)\s*=\s*["']?\s*\+\s*(?:[a-zA-Z0-9_$]+\()?this\.([A-Za-z0-9_$]+)/g;
                      let pMatch;
-                     while((pMatch = paramRegex.exec(params)) !== null) {
+                     while ((pMatch = paramRegex.exec(params)) !== null) {
                          let pName = pMatch[1];
                          let obf = pMatch[2];
                          if (getterMap[obf]) obf = getterMap[obf];
@@ -74,9 +210,9 @@
                      let clsMatch = funcBody.match(/["']([A-Za-z0-9_$]+)\s*(?:\[|\()/);
                      if (!clsMatch) return;
                      let cls = clsMatch[1];
-                     const paramRegex = /["']([a-zA-Z0-9_$]+)\s*=\s*["']\s*\+\s*(?:[a-zA-Z0-9_$]+\()?this\.([a-zA-Z0-9_$]+)/g;
+                     const paramRegex = /["']([a-zA-Z0-9_$]+)\s*=\s*["']\s*\+\s*(?:[a-zA-Z0-9_$]+\()?this\.([A-Za-z0-9_$]+)/g;
                      let pMatch;
-                     while((pMatch = paramRegex.exec(funcBody)) !== null) {
+                     while ((pMatch = paramRegex.exec(funcBody)) !== null) {
                          let pName = pMatch[1];
                          let obf = pMatch[2];
                          if (getterMap[obf]) obf = getterMap[obf];
@@ -86,7 +222,7 @@
              });
              return results;
          },
-         runScan: async function() {
+         runScan: async function () {
              const mappings = await this.fetchAndParseScripts();
              mappings.forEach(m => {
                  const fullKey = `${m.cls}.${m.pName}`;
