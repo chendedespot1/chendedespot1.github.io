@@ -6,7 +6,7 @@
          'HorizontalAimingParams.angleStep': 0.004999,
          'VerticalAimingParams.elevationAngleUp': 0.453861,
          'VerticalAimingParams.elevationAngleDown': 0.453861,
-         'Weapon.CommonCC.impactForce': 0
+         'WeaponCommonCC.impactForce': 0
      };
      let panelConfig = { ...HACK_CONFIG };
      let panelExpanded = false;
@@ -98,7 +98,7 @@
          addItem('HorizontalAimingParams.angleStep', '扇形', 0.001, 0.01, 0.0001);
          addItem('VerticalAimingParams.elevationAngleUp', '仰角', 0.1, 1.0, 0.0001);
          addItem('VerticalAimingParams.elevationAngleDown', '俯角', 0.1, 1.0, 0.0001);
-         addItem('Weapon.CommonCC.impactForce', '微冲击（暂不可用）', 0.05, 0.5, 0.001);
+         addItem('WeaponCommonCC.impactForce', '无冲（不建议玩宇宙图）', 0.05, 0.5, 0.001);
          panel.appendChild(content);
          document.body.appendChild(panel);
          panel.addEventListener('click', () => {
@@ -163,7 +163,7 @@
          applyHook: function (obfName, targetKey, targetVal) {
              if (this.runtimeHacks[obfName]) return;
              this.runtimeHacks[obfName] = true;
-             console.log(`%c锁定: ${targetKey}`, 'color: #00D4FF; font-weight: bold');
+             console.log(`%c锁定: ${targetKey} → ${obfName}`, 'color: #00D4FF; font-weight: bold');
              try {
                  Object.defineProperty(_win.Object.prototype, obfName, {
                      get: () => panelConfig[targetKey],
@@ -194,7 +194,7 @@
                  while ((match = classRegex.exec(code)) !== null) {
                      let cls = match[1];
                      let params = match[2];
-                     const paramRegex = /([a-zA-Z0-9_$]+)\s*=\s*["']?\s*\+\s*(?:[a-zA-Z0-9_$]+\()?this\.([A-Za-z0-9_$]+)/g;
+                     const paramRegex = /([a-zA-Z0-9_$]+)\s*=\s*["']?\s*\+\s*(?:[a-zA-Z0-9_$]+\()?this\.([a-zA-Z0-9_$]+)/g;
                      let pMatch;
                      while ((pMatch = paramRegex.exec(params)) !== null) {
                          let pName = pMatch[1];
@@ -208,9 +208,9 @@
                  while ((tsMatch = toStringRegex.exec(code)) !== null) {
                      let funcBody = tsMatch[1];
                      let clsMatch = funcBody.match(/["']([A-Za-z0-9_$]+)\s*(?:\[|\()/);
-                     if (!clsMatch) return;
+                     if (!clsMatch) continue;
                      let cls = clsMatch[1];
-                     const paramRegex = /["']([a-zA-Z0-9_$]+)\s*=\s*["']\s*\+\s*(?:[a-zA-Z0-9_$]+\()?this\.([A-Za-z0-9_$]+)/g;
+                     const paramRegex = /["']([a-zA-Z0-9_$]+)\s*=\s*["']\s*\+\s*(?:[a-zA-Z0-9_$]+\()?this\.([a-zA-Z0-9_$]+)/g;
                      let pMatch;
                      while ((pMatch = paramRegex.exec(funcBody)) !== null) {
                          let pName = pMatch[1];
