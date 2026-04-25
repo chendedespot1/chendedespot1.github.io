@@ -1,236 +1,171 @@
- (function () {
-     'use strict';
-     const _win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-     const HACK_CONFIG = {
-         'HoverChassisParams.tiltStabilityScale': 61.47483647,
-         'HorizontalAimingParams.angleStep': 0.004999,
-         'VerticalAimingParams.elevationAngleUp': 0.453861,
-         'VerticalAimingParams.elevationAngleDown': 0.453861,
-         'Weapon.CommonCC.impactForce': 0.100483647
-     };
-     let panelConfig = { ...HACK_CONFIG };
-     let panelExpanded = false;
-     console.log('%c 悬稳+自瞄+微冲击已启动', 'background: #000; color: #76FF33; font-size: 14px; font-weight: bold;');
-     function createPanel() {
-         const panel = document.createElement('div');
-         panel.id = 'tank-hack-panel';
-         panel.style.cssText = `
-             position: fixed;
-             top: 20px;
-             left: 20px;
-             transform: none;
-             width: 38px;
-             height: 38px;
-             border-radius: 50%;
-             background: rgba(0,0,0,0.2);
-             border: 1px solid rgba(118,255,51,0.3);
-             z-index: 999999;
-             cursor: pointer;
-             transition: all 0.2s ease;
-             overflow: hidden;
-             pointer-events: auto;
-         `;
-         const content = document.createElement('div');
-         content.style.cssText = `
-             display: none;
-             padding: 10px;
-             color: #fff;
-             font-size: 12px;
-             user-select: none;
-             font-family: sans-serif;
-             position: relative;
-         `;
-         const closeBtn = document.createElement('div');
-         closeBtn.innerText = '×';
-         closeBtn.style.cssText = `
-             position: absolute;
-             top: 4px;
-             right: 8px;
-             font-size: 16px;
-             color: #fff;
-             cursor: pointer;
-             width: 20px;
-             height: 20px;
-             line-height: 20px;
-             text-align: center;
-         `;
-         content.appendChild(closeBtn);
-         closeBtn.addEventListener('click', (e) => {
-             e.stopPropagation();
-             panelExpanded = false;
-             panel.style.width = '38px';
-             panel.style.height = '38px';
-             panel.style.left = '20px';
-             panel.style.top = '20px';
-             panel.style.transform = 'none';
-             panel.style.borderRadius = '50%';
-             panel.style.background = 'rgba(0,0,0,0.2)';
-             content.style.display = 'none';
-         });
-         function addItem(key, label, min, max, step) {
-             const wrap = document.createElement('div');
-             wrap.style.margin = '3px 0';
-             const text = document.createElement('div');
-             text.style.display = 'flex';
-             text.style.justifyContent = 'space-between';
-             text.style.fontSize = '11px';
-             text.innerText = label;
-             const val = document.createElement('span');
-             val.innerText = panelConfig[key].toFixed(6);
-             text.appendChild(val);
-             wrap.appendChild(text);
-             const slider = document.createElement('input');
-             slider.type = 'range';
-             slider.min = min;
-             slider.max = max;
-             slider.step = step;
-             slider.value = panelConfig[key];
-             slider.style.width = '100%';
-             slider.style.height = '6px';
-             slider.oninput = () => {
-                 panelConfig[key] = parseFloat(slider.value);
-                 val.innerText = panelConfig[key].toFixed(6);
-             };
-             wrap.appendChild(slider);
-             content.appendChild(wrap);
-         }
-         addItem('HoverChassisParams.tiltStabilityScale', '悬浮稳定', 10, 100, 0.1);
-         addItem('HorizontalAimingParams.angleStep', '扇形', 0.001, 0.01, 0.0001);
-         addItem('VerticalAimingParams.elevationAngleUp', '仰角', 0.1, 1.0, 0.0001);
-         addItem('VerticalAimingParams.elevationAngleDown', '俯角', 0.1, 1.0, 0.0001);
-         addItem('Weapon.CommonCC.impactForce', '微冲击（暂不可用）', 0.05, 0.5, 0.001);
-         panel.appendChild(content);
-         document.body.appendChild(panel);
-         panel.addEventListener('click', () => {
-             if (panelExpanded) return;
-             panelExpanded = true;
-             panel.style.width = '260px';
-             panel.style.height = 'auto';
-             panel.style.left = '20px';
-             panel.style.top = '20px';
-             panel.style.transform = 'none';
-             panel.style.borderRadius = '8px';
-             panel.style.background = 'rgba(0,0,0,0.4)';
-             content.style.display = 'block';
-         });
-         panel.addEventListener('dblclick', () => {
-             panelExpanded = false;
-             panel.style.width = '38px';
-             panel.style.height = '38px';
-             panel.style.left = '20px';
-             panel.style.top = '20px';
-             panel.style.transform = 'none';
-             panel.style.borderRadius = '50%';
-             panel.style.background = 'rgba(0,0,0,0.2)';
-             content.style.display = 'none';
-         });
-         let isDragging = false, ox = 0, oy = 0;
-         panel.addEventListener('mousedown', e => {
-             isDragging = true;
-             ox = e.clientX - panel.getBoundingClientRect().left;
-             oy = e.clientY - panel.getBoundingClientRect().top;
-             e.stopPropagation();
-         });
-         document.addEventListener('mousemove', e => {
-             if (!isDragging) return;
-             panel.style.left = e.clientX - ox + 'px';
-             panel.style.top = e.clientY - oy + 'px';
-             panel.style.transform = 'none';
-         });
-         document.addEventListener('mouseup', () => {
-             isDragging = false;
-         });
-     }
-     const TankCore = {
-         runtimeHacks: {},
-         init: function () {
-             this.runScan();
-             window.addEventListener('load', () => {
-                 this.runScan();
-                 createPanel();
-             });
-             const interval = setInterval(() => {
-                 const foundCount = Object.keys(this.runtimeHacks).length;
-                 const targetCount = Object.keys(HACK_CONFIG).length;
-                 if (foundCount >= targetCount) {
-                     clearInterval(interval);
-                     console.log('%c [TankHack] 已全部锁定', 'color: #76FF33');
-                 } else {
-                     this.runScan();
-                 }
-             }, 2000);
-         },
-         applyHook: function (obfName, targetKey, targetVal) {
-             if (this.runtimeHacks[obfName]) return;
-             this.runtimeHacks[obfName] = true;
-             console.log(`%c锁定: ${targetKey}`, 'color: #00D4FF; font-weight: bold');
-             try {
-                 Object.defineProperty(_win.Object.prototype, obfName, {
-                     get: () => panelConfig[targetKey],
-                     set: function () {},
-                     enumerable: false,
-                     configurable: true
-                 });
-             } catch (e) {}
-         },
-         fetchAndParseScripts: async function () {
-             let codes = [];
-             document.querySelectorAll('script:not([src])').forEach(s => codes.push(s.innerHTML));
-             let scriptTags = document.querySelectorAll('script[src]');
-             for (let s of scriptTags) {
-                 if (s.src.includes('analytics') || s.src.includes('google') || s.src.includes('yandex')) continue;
-                 try { codes.push(await (await fetch(s.src)).text()); } catch (e) {}
-             }
-             let results = [];
-             codes.forEach(code => {
-                 const getterMap = {};
-                 const getterRegex1 = /\.([A-Za-z0-9_$]+)\s*=\s*function\(\)\s*\{[^}]*?var\s+[A-Za-z0-9_$]+\s*=\s*this\.([A-Za-z0-9_$]+)\s*;/g;
-                 const getterRegex2 = /\.([A-Za-z0-9_$]+)\s*=\s*function\(\)\s*\{\s*return\s+this\.([A-Za-z0-9_$]+)\s*;?\s*\}/g;
-                 let gm;
-                 while ((gm = getterRegex1.exec(code)) !== null) { getterMap[gm[1]] = gm[2]; }
-                 while ((gm = getterRegex2.exec(code)) !== null) { getterMap[gm[1]] = gm[2]; }
-                 const classRegex = /return\s*["']([A-Za-z0-9_$]+)\(([\s\S]*?)\)["']/g;
-                 let match;
-                 while ((match = classRegex.exec(code)) !== null) {
-                     let cls = match[1];
-                     let params = match[2];
-                     const paramRegex = /([a-zA-Z0-9_$]+)\s*=\s*["']?\s*\+\s*(?:[a-zA-Z0-9_$]+\()?this\.([A-Za-z0-9_$]+)/g;
-                     let pMatch;
-                     while ((pMatch = paramRegex.exec(params)) !== null) {
-                         let pName = pMatch[1];
-                         let obf = pMatch[2];
-                         if (getterMap[obf]) obf = getterMap[obf];
-                         results.push({ cls: cls, pName: pName, obf: obf });
-                     }
-                 }
-                 const toStringRegex = /\.toString\s*=\s*function\(\)\s*\{([\s\S]{1,4000}?)\}/g;
-                 let tsMatch;
-                 while ((tsMatch = toStringRegex.exec(code)) !== null) {
-                     let funcBody = tsMatch[1];
-                     let clsMatch = funcBody.match(/["']([A-Za-z0-9_$]+)\s*(?:\[|\()/);
-                     if (!clsMatch) return;
-                     let cls = clsMatch[1];
-                     const paramRegex = /["']([a-zA-Z0-9_$]+)\s*=\s*["']\s*\+\s*(?:[a-zA-Z0-9_$]+\()?this\.([A-Za-z0-9_$]+)/g;
-                     let pMatch;
-                     while ((pMatch = paramRegex.exec(funcBody)) !== null) {
-                         let pName = pMatch[1];
-                         let obf = pMatch[2];
-                         if (getterMap[obf]) obf = getterMap[obf];
-                         results.push({ cls: cls, pName: pName, obf: obf });
-                     }
-                 }
-             });
-             return results;
-         },
-         runScan: async function () {
-             const mappings = await this.fetchAndParseScripts();
-             mappings.forEach(m => {
-                 const fullKey = `${m.cls}.${m.pName}`;
-                 if (HACK_CONFIG.hasOwnProperty(fullKey)) {
-                     this.applyHook(m.obf, fullKey, HACK_CONFIG[fullKey]);
-                 }
-             });
-         }
-     };
-     TankCore.init();
- })();
+// ==UserScript==
+// @name         悬浮底盘专用飞天穿墙（跑酷专用）
+// @version      1.0
+// @description  基于 v1.3.2 核心引擎的无界面版。强制锁定 tiltStabilityScale 和 halfSize。
+// @match        *://*.3dtank.com/play*
+// @match        *://*.tankionline.com/play*
+// @match        *://*.test-eu.tankionline.com/browser-public/index.html*
+// @run-at       document-start
+// @grant        unsafeWindow
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    const _win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+
+    // --- 🎯 你的配置清单 ---
+    // 只有写在这里的参数才会被修改
+    const HACK_CONFIG = {
+        'HoverChassisParams.tiltStabilityScale': 2147483647,  // 21亿 (飞天)
+        'CollisionBox.halfSize': {}                           // 空对象 (穿墙)
+    };
+
+    console.log('%c 悬浮底盘飞天穿墙核心引擎启动 ', 'background: #000; color: #76FF33; font-size: 14px; font-weight: bold;');
+
+    const TankCore = {
+        runtimeHacks: {}, // 记录已经 Hook 过的混淆名
+
+        init: function() {
+            // 立即扫描一次
+            this.runScan();
+            // 页面加载完再扫一次
+            window.addEventListener('load', () => this.runScan());
+            // 防止脚本加载延迟，每秒检查一次，直到找到目标
+            const interval = setInterval(() => {
+                const foundCount = Object.keys(this.runtimeHacks).length;
+                const targetCount = Object.keys(HACK_CONFIG).length;
+                if (foundCount >= targetCount) {
+                    clearInterval(interval);
+                    console.log('%c [TankHack] 所有目标已锁定，停止扫描。', 'color: #76FF33');
+                } else {
+                    this.runScan();
+                }
+            }, 2000);
+        },
+
+        // --- 1. 核心 Hook 机制 (完全照搬 v1.3.3) ---
+        applyHook: function(obfName, targetKey, targetVal) {
+            if (this.runtimeHacks[obfName]) return; // 防止重复 Hook
+            this.runtimeHacks[obfName] = true;
+
+            console.log(`%c [TankHack] 锁定成功: ${targetKey} (混淆名: ${obfName}) => ${JSON.stringify(targetVal)}`, 'color: #00D4FF; font-weight: bold;');
+
+            const instanceValues = new WeakMap(); // 存储原始值的容器
+
+            // Getter: 永远返回我们要锁定的值 (targetVal)
+            const getHandler = function() {
+                // 如果你想看原始值是什么，可以在这里 console.log
+                return targetVal;
+            };
+
+            // Setter: 假装允许写入，实际上写入到 instanceValues 里备用，但不影响 Getter 的返回值
+            const setHandler = function(val) {
+                instanceValues.set(this, val);
+                // 可以在这里加逻辑：如果游戏试图改回原始值，我们什么都不做
+            };
+
+            try {
+                Object.defineProperty(_win.Object.prototype, obfName, {
+                    get: getHandler,
+                    set: function(v) {
+                        try {
+                            Object.defineProperty(this, obfName, { get: getHandler, set: setHandler, enumerable: true, configurable: true });
+                            this[obfName] = v; // 触发 setHandler
+                        } catch (e) {
+                            setHandler.call(this, v);
+                        }
+                    },
+                    enumerable: false,
+                    configurable: true
+                });
+            } catch (e) {
+                console.warn("[TankHack] Hook 失败", obfName);
+            }
+        },
+
+        // --- 2. 源码获取与解析 (完全照搬 v1.3.3) ---
+        fetchAndParseScripts: async function() {
+            let codes = [];
+            // 获取内联脚本
+            document.querySelectorAll('script:not([src])').forEach(s => codes.push(s.innerHTML));
+            // 获取外链脚本
+            let scriptTags = document.querySelectorAll('script[src]');
+            for(let s of scriptTags) {
+                if(s.src.includes('analytics') || s.src.includes('google') || s.src.includes('yandex')) continue;
+                try { codes.push(await (await fetch(s.src)).text()); } catch(e){}
+            }
+
+            let results = [];
+
+            codes.forEach(code => {
+                // A. 构建 Getter 字典 (解决 this.tcx() 这种封装)
+                const getterMap = {};
+                const getterRegex1 = /\.([A-Za-z0-9_$]+)\s*=\s*function\(\)\s*\{[^}]*?var\s+[A-Za-z0-9_$]+\s*=\s*this\.([A-Za-z0-9_$]+)\s*;/g;
+                const getterRegex2 = /\.([A-Za-z0-9_$]+)\s*=\s*function\(\)\s*\{\s*return\s+this\.([A-Za-z0-9_$]+)\s*;?\s*\}/g;
+
+                let gm;
+                while ((gm = getterRegex1.exec(code)) !== null) { getterMap[gm[1]] = gm[2]; }
+                while ((gm = getterRegex2.exec(code)) !== null) { getterMap[gm[1]] = gm[2]; }
+
+                // B. 匹配模式 1: 经典 return "Class(" + this.obf
+                const classRegex = /return\s*["']([A-Za-z0-9_$]+)\(([\s\S]*?)\)["']/g;
+                let match;
+                while ((match = classRegex.exec(code)) !== null) {
+                    let cls = match[1];
+                    let params = match[2];
+                    const paramRegex = /([a-zA-Z0-9_$]+)\s*=\s*["']?\s*\+\s*(?:[a-zA-Z0-9_$]+\()?this\.([a-zA-Z0-9_$]+)/g;
+                    let pMatch;
+                    while((pMatch = paramRegex.exec(params)) !== null) {
+                        let pName = pMatch[1];
+                        let obf = pMatch[2];
+                        if (getterMap[obf]) obf = getterMap[obf]; // 解包
+
+                        results.push({ cls: cls, pName: pName, obf: obf });
+                    }
+                }
+
+                // C. 匹配模式 2: 新版 toString (CollisionBox 就是这个模式)
+                const toStringRegex = /\.toString\s*=\s*function\(\)\s*\{([\s\S]{1,4000}?)\}/g;
+                let tsMatch;
+                while ((tsMatch = toStringRegex.exec(code)) !== null) {
+                    let funcBody = tsMatch[1];
+                    let clsMatch = funcBody.match(/["']([A-Za-z0-9_$]+)\s*(?:\[|\()/);
+                    if (!clsMatch) continue;
+                    let cls = clsMatch[1];
+
+                    const paramRegex = /["']([a-zA-Z0-9_$]+)\s*=\s*["']\s*\+\s*(?:[a-zA-Z0-9_$]+\()?this\.([a-zA-Z0-9_$]+)/g;
+                    let pMatch;
+                    while((pMatch = paramRegex.exec(funcBody)) !== null) {
+                        let pName = pMatch[1];
+                        let obf = pMatch[2];
+                        if (getterMap[obf]) obf = getterMap[obf]; // 解包
+
+                        results.push({ cls: cls, pName: pName, obf: obf });
+                    }
+                }
+            });
+            return results;
+        },
+
+        // --- 3. 扫描并匹配配置 ---
+        runScan: async function() {
+            const mappings = await this.fetchAndParseScripts();
+
+            mappings.forEach(m => {
+                // 组合键名: ClassName.ParamName
+                const fullKey = `${m.cls}.${m.pName}`;
+
+                // 检查这个参数是否在我们的 HACK_CONFIG 里
+                if (HACK_CONFIG.hasOwnProperty(fullKey)) {
+                    const targetVal = HACK_CONFIG[fullKey];
+                    // 执行 Hook
+                    this.applyHook(m.obf, fullKey, targetVal);
+                }
+            });
+        }
+    };
+
+    TankCore.init();
+
+})();
