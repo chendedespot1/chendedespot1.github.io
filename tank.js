@@ -1,171 +1,275 @@
-// ==UserScript==
-// @name         悬浮底盘专用飞天穿墙（跑酷专用）
-// @version      1.0
-// @description  基于 v1.3.2 核心引擎的无界面版。强制锁定 tiltStabilityScale 和 halfSize。
-// @match        *://*.3dtank.com/play*
-// @match        *://*.tankionline.com/play*
-// @match        *://*.test-eu.tankionline.com/browser-public/index.html*
-// @run-at       document-start
-// @grant        unsafeWindow
-// ==/UserScript==
-
-(function () {
+(function() {
     'use strict';
 
-    const _win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+    const TARGET_KEY = 'entrance_hash_key';
+    let currentKey = localStorage.getItem(TARGET_KEY) || '未找到密钥';
 
-    // --- 🎯 你的配置清单 ---
-    // 只有写在这里的参数才会被修改
-    const HACK_CONFIG = {
-        'HoverChassisParams.tiltStabilityScale': 2147483647,  // 21亿 (飞天)
-        'CollisionBox.halfSize': {}                           // 空对象 (穿墙)
-    };
+    const host = document.createElement('div');
+    host.style.position = 'fixed';
+    host.style.zIndex = '2147483647';
+    document.documentElement.appendChild(host);
 
-    console.log('%c 悬浮底盘飞天穿墙核心引擎启动 ', 'background: #000; color: #76FF33; font-size: 14px; font-weight: bold;');
+    const shadow = host.attachShadow({ mode: 'open' });
 
-    const TankCore = {
-        runtimeHacks: {}, // 记录已经 Hook 过的混淆名
+    // 复制图标
+    const iconCopy = `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#001926"><path d="M360-240q-33 0-56.5-23.5T280-320v-480q0-33 23.5-56.5T360-880h360q33 0 56.5 23.5T800-800v480q0 33-23.5 56.5T720-240H360Zm0-80h360v-480H360v480ZM200-80q-33 0-56.5-23.5T120-160v-520q0-17 11.5-28.5T160-720q17 0 28.5 11.5T200-680v520h400q17 0 28.5 11.5T640-120q0 17-11.5 28.5T600-80H200Zm160-240v-480 480Z"/></svg>`;
+    // 保存图标
+    const iconSave = `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#001926"><path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h447q16 0 30.5 6t25.5 17l114 114q11 11 17 25.5t6 30.5v447q0 33-23.5 56.5T760-120H200Zm560-526L646-760H200v560h560v-446ZM565-275q35-35 35-85t-35-85q-35-35-85-35t-85 35q-35 35-35 85t35 85q35 35 85 35t85-35ZM280-560h280q17 0 28.5-11.5T600-600v-80q0-17-11.5-28.5T560-720H280q-17 0-28.5 11.5T240-680v80q0 17 11.5 28.5T280-560Zm-80-86v446-560 114Z"/></svg>`;
+    // 对号图标
+    const iconCheck = `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#001926"><path d="m382-354 339-339q12-12 28-12t28 12q12 12 12 28.5T777-636L410-268q-12 12-28 12t-28-12L182-440q-12-12-11.5-28.5T183-497q12-12 28.5-12t28.5 12l142 143Z"/></svg>`;
 
-        init: function() {
-            // 立即扫描一次
-            this.runScan();
-            // 页面加载完再扫一次
-            window.addEventListener('load', () => this.runScan());
-            // 防止脚本加载延迟，每秒检查一次，直到找到目标
-            const interval = setInterval(() => {
-                const foundCount = Object.keys(this.runtimeHacks).length;
-                const targetCount = Object.keys(HACK_CONFIG).length;
-                if (foundCount >= targetCount) {
-                    clearInterval(interval);
-                    console.log('%c [TankHack] 所有目标已锁定，停止扫描。', 'color: #76FF33');
-                } else {
-                    this.runScan();
-                }
-            }, 2000);
-        },
-
-        // --- 1. 核心 Hook 机制 (完全照搬 v1.3.3) ---
-        applyHook: function(obfName, targetKey, targetVal) {
-            if (this.runtimeHacks[obfName]) return; // 防止重复 Hook
-            this.runtimeHacks[obfName] = true;
-
-            console.log(`%c [TankHack] 锁定成功: ${targetKey} (混淆名: ${obfName}) => ${JSON.stringify(targetVal)}`, 'color: #00D4FF; font-weight: bold;');
-
-            const instanceValues = new WeakMap(); // 存储原始值的容器
-
-            // Getter: 永远返回我们要锁定的值 (targetVal)
-            const getHandler = function() {
-                // 如果你想看原始值是什么，可以在这里 console.log
-                return targetVal;
-            };
-
-            // Setter: 假装允许写入，实际上写入到 instanceValues 里备用，但不影响 Getter 的返回值
-            const setHandler = function(val) {
-                instanceValues.set(this, val);
-                // 可以在这里加逻辑：如果游戏试图改回原始值，我们什么都不做
-            };
-
-            try {
-                Object.defineProperty(_win.Object.prototype, obfName, {
-                    get: getHandler,
-                    set: function(v) {
-                        try {
-                            Object.defineProperty(this, obfName, { get: getHandler, set: setHandler, enumerable: true, configurable: true });
-                            this[obfName] = v; // 触发 setHandler
-                        } catch (e) {
-                            setHandler.call(this, v);
-                        }
-                    },
-                    enumerable: false,
-                    configurable: true
-                });
-            } catch (e) {
-                console.warn("[TankHack] Hook 失败", obfName);
-            }
-        },
-
-        // --- 2. 源码获取与解析 (完全照搬 v1.3.3) ---
-        fetchAndParseScripts: async function() {
-            let codes = [];
-            // 获取内联脚本
-            document.querySelectorAll('script:not([src])').forEach(s => codes.push(s.innerHTML));
-            // 获取外链脚本
-            let scriptTags = document.querySelectorAll('script[src]');
-            for(let s of scriptTags) {
-                if(s.src.includes('analytics') || s.src.includes('google') || s.src.includes('yandex')) continue;
-                try { codes.push(await (await fetch(s.src)).text()); } catch(e){}
+    shadow.innerHTML = `
+        <style>
+            :host {
+                --color-primary: #76FF33;
+                --color-background: rgba(0, 25, 38, 0.75);
+                --color-on-background: #BFD5FF;
+                --color-surface-variant: rgba(191, 213, 255, 0.1);
+                --color-outline: rgba(191, 213, 255, 0.25);
+                --color-outline-focus: #76FF33;
             }
 
-            let results = [];
+            * { box-sizing: border-box; }
 
-            codes.forEach(code => {
-                // A. 构建 Getter 字典 (解决 this.tcx() 这种封装)
-                const getterMap = {};
-                const getterRegex1 = /\.([A-Za-z0-9_$]+)\s*=\s*function\(\)\s*\{[^}]*?var\s+[A-Za-z0-9_$]+\s*=\s*this\.([A-Za-z0-9_$]+)\s*;/g;
-                const getterRegex2 = /\.([A-Za-z0-9_$]+)\s*=\s*function\(\)\s*\{\s*return\s+this\.([A-Za-z0-9_$]+)\s*;?\s*\}/g;
+            .dialog-box {
+                position: fixed;
+                top: 24px;
+                left: 50%;
+                width: 90vw;
+                max-width: 360px;
+                background: var(--color-background);
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                border: 1px solid rgba(118, 255, 51, 0.15);
+                border-radius: 28px;
+                padding: 24px 20px;
+                box-shadow: 0 24px 48px rgba(0, 0, 0, 0.3), 0 0 40px rgba(0, 25, 38, 0.5);
+                font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                color: var(--color-on-background);
+                animation: pop-in 0.4s cubic-bezier(0.2, 0, 0, 1) forwards;
+            }
 
-                let gm;
-                while ((gm = getterRegex1.exec(code)) !== null) { getterMap[gm[1]] = gm[2]; }
-                while ((gm = getterRegex2.exec(code)) !== null) { getterMap[gm[1]] = gm[2]; }
+            @keyframes pop-in {
+                0% { opacity: 0; transform: translateX(-50%) scale(0.9) translateY(-20px); }
+                100% { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
+            }
 
-                // B. 匹配模式 1: 经典 return "Class(" + this.obf
-                const classRegex = /return\s*["']([A-Za-z0-9_$]+)\(([\s\S]*?)\)["']/g;
-                let match;
-                while ((match = classRegex.exec(code)) !== null) {
-                    let cls = match[1];
-                    let params = match[2];
-                    const paramRegex = /([a-zA-Z0-9_$]+)\s*=\s*["']?\s*\+\s*(?:[a-zA-Z0-9_$]+\()?this\.([a-zA-Z0-9_$]+)/g;
-                    let pMatch;
-                    while((pMatch = paramRegex.exec(params)) !== null) {
-                        let pName = pMatch[1];
-                        let obf = pMatch[2];
-                        if (getterMap[obf]) obf = getterMap[obf]; // 解包
+            .close-btn {
+                position: absolute;
+                top: 20px;
+                right: 20px;
+                background: transparent;
+                border: none;
+                color: var(--color-on-background);
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: background 0.2s;
+                opacity: 0.7;
+            }
 
-                        results.push({ cls: cls, pName: pName, obf: obf });
-                    }
-                }
+            .close-btn:hover, .close-btn:active {
+                background: rgba(191, 213, 255, 0.15);
+                opacity: 1;
+            }
 
-                // C. 匹配模式 2: 新版 toString (CollisionBox 就是这个模式)
-                const toStringRegex = /\.toString\s*=\s*function\(\)\s*\{([\s\S]{1,4000}?)\}/g;
-                let tsMatch;
-                while ((tsMatch = toStringRegex.exec(code)) !== null) {
-                    let funcBody = tsMatch[1];
-                    let clsMatch = funcBody.match(/["']([A-Za-z0-9_$]+)\s*(?:\[|\()/);
-                    if (!clsMatch) continue;
-                    let cls = clsMatch[1];
+            .dialog-title {
+                font-size: 20px;
+                font-weight: 600;
+                margin-bottom: 24px;
+                margin-top: 4px;
+                color: var(--color-primary);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
 
-                    const paramRegex = /["']([a-zA-Z0-9_$]+)\s*=\s*["']\s*\+\s*(?:[a-zA-Z0-9_$]+\()?this\.([a-zA-Z0-9_$]+)/g;
-                    let pMatch;
-                    while((pMatch = paramRegex.exec(funcBody)) !== null) {
-                        let pName = pMatch[1];
-                        let obf = pMatch[2];
-                        if (getterMap[obf]) obf = getterMap[obf]; // 解包
+            .input-label {
+                font-size: 13px;
+                font-weight: 500;
+                margin-bottom: 8px;
+                color: var(--color-on-background);
+                opacity: 0.85;
+            }
 
-                        results.push({ cls: cls, pName: pName, obf: obf });
-                    }
-                }
-            });
-            return results;
-        },
+            .input-group {
+                display: flex;
+                gap: 12px;
+                margin-bottom: 24px;
+                align-items: center;
+            }
 
-        // --- 3. 扫描并匹配配置 ---
-        runScan: async function() {
-            const mappings = await this.fetchAndParseScripts();
+            .input-field {
+                flex: 1;
+                background: var(--color-surface-variant);
+                border: 1px solid var(--color-outline);
+                border-radius: 16px;
+                padding: 12px 16px;
+                color: var(--color-primary);
+                font-family: ui-monospace, monospace;
+                font-size: 14px;
+                outline: none;
+                transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+                min-width: 0;
+                height: 48px;
+            }
 
-            mappings.forEach(m => {
-                // 组合键名: ClassName.ParamName
-                const fullKey = `${m.cls}.${m.pName}`;
+            .input-field:focus {
+                border-color: var(--color-outline-focus);
+                background: rgba(118, 255, 51, 0.08);
+                box-shadow: 0 0 0 4px rgba(118, 255, 51, 0.1);
+            }
 
-                // 检查这个参数是否在我们的 HACK_CONFIG 里
-                if (HACK_CONFIG.hasOwnProperty(fullKey)) {
-                    const targetVal = HACK_CONFIG[fullKey];
-                    // 执行 Hook
-                    this.applyHook(m.obf, fullKey, targetVal);
-                }
-            });
+            .input-field::placeholder {
+                color: rgba(191, 213, 255, 0.4);
+                font-family: system-ui, sans-serif;
+            }
+
+            .icon-btn {
+                background: var(--color-primary);
+                color: #001926;
+                border: none;
+                border-radius: 50%;
+                width: 48px;
+                height: 48px;
+                flex-shrink: 0;
+                cursor: pointer;
+                transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .icon-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 16px rgba(118, 255, 51, 0.25);
+                filter: brightness(1.1);
+            }
+
+            .icon-btn:active {
+                transform: translateY(0);
+                filter: brightness(0.9);
+            }
+
+            .toast {
+                position: absolute;
+                left: 50%;
+                bottom: -20px;
+                transform: translate(-50%, 10px) scale(0.9);
+                background: var(--color-on-background);
+                color: #001926;
+                padding: 12px 24px;
+                border-radius: 14px;
+                font-size: 14px;
+                font-weight: 600;
+                box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+                opacity: 0;
+                pointer-events: none;
+                transition: all 0.4s cubic-bezier(0.2, 0, 0, 1);
+                white-space: nowrap;
+                z-index: 10;
+            }
+
+            .toast.show {
+                transform: translate(-50%, 24px) scale(1);
+                opacity: 1;
+            }
+        </style>
+
+        <div class="dialog-box">
+            <button id="tm-close-btn" class="close-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M480-424 284-228q-11 11-28 11t-28-11q-11-11-11-28t11-28l196-196-196-196q-11-11-11-28t11-28q11-11 28-11t28 11l196 196 196-196q11-11 28-11t28 11q11 11 11 28t-11 28L536-480l196 196q11 11 11 28t-11 28q-11 11-28 11t-28-11L480-424Z"/></svg>
+            </button>
+
+            <div class="dialog-title">
+                <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M443.5-736.5Q467-760 500-760t56.5 23.5Q580-713 580-680t-23.5 56.5Q533-600 500-600t-56.5-23.5Q420-647 420-680t23.5-56.5ZM260-680q0-100 70-170t170-70q100 0 170 70t70 170q0 67-33 121.5T620-472v335q0 8-3 15.5t-9 13.5l-80 80q-6 6-13 8.5T500-17q-8 0-15-2.5T472-28L345-155q-5-5-8-12t-4-14q-1-7 1-14t7-13l39-52-43-57q-4-5-6-11t-2-12q0-6 2-12.5t6-11.5l43-61v-47q-54-32-87-86.5T260-680Zm80 0q0 56 34 98.5t86 56.5v125l-41 58h-.5.5l61 82-55 71 75 75v-.5.5l40-40h.5-.5v-371q52-14 86-56.5t34-98.5q0-66-47-113t-113-47q-66 0-113 47t-47 113Z"/></svg>
+                登录密钥管理
+            </div>
+
+            <div class="input-label">当前存储的密钥</div>
+            <div class="input-group">
+                <input type="text" id="tm-current-key" class="input-field" readonly />
+                <button id="tm-copy-btn" class="icon-btn">${iconCopy}</button>
+            </div>
+
+            <div class="input-label">覆盖密钥</div>
+            <div class="input-group" style="margin-bottom: 0;">
+                <input type="text" id="tm-new-key" class="input-field" placeholder="输入新密钥" autocomplete="off"/>
+                <button id="tm-save-btn" class="icon-btn">${iconSave}</button>
+            </div>
+        </div>
+    `;
+
+    shadow.getElementById('tm-current-key').value = currentKey;
+
+    function showToast(msg) {
+        let toast = shadow.querySelector('.toast');
+        if (toast) toast.remove();
+
+        toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = msg;
+        shadow.querySelector('.dialog-box').appendChild(toast);
+
+        void toast.offsetWidth;
+        toast.classList.add('show');
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 400);
+        }, 2000);
+    }
+
+    shadow.getElementById('tm-copy-btn').addEventListener('click', () => {
+        const keyVal = shadow.getElementById('tm-current-key').value;
+        if (keyVal && keyVal !== '未找到密钥') {
+            GM_setClipboard(keyVal, 'text');
+            showToast('已复制到剪贴板');
+
+            const btn = shadow.getElementById('tm-copy-btn');
+            btn.innerHTML = iconCheck;
+            btn.style.background = '#BFD5FF';
+            setTimeout(() => {
+                btn.innerHTML = iconCopy;
+                btn.style.background = 'var(--color-primary)';
+            }, 1500);
+        } else {
+            showToast('当前没有可复制的有效密钥');
         }
-    };
+    });
 
-    TankCore.init();
+    shadow.getElementById('tm-save-btn').addEventListener('click', () => {
+        const newVal = shadow.getElementById('tm-new-key').value.trim();
+        if (newVal === '') {
+            showToast('新密钥不能为空！');
+            return;
+        }
+
+        localStorage.setItem(TARGET_KEY, newVal);
+        shadow.getElementById('tm-current-key').value = newVal;
+        shadow.getElementById('tm-new-key').value = '';
+
+        const btn = shadow.getElementById('tm-save-btn');
+        btn.innerHTML = iconCheck;
+
+        showToast('保存成功！即将刷新页面');
+        setTimeout(() => {
+            location.reload();
+        }, 1200);
+    });
+
+    shadow.getElementById('tm-close-btn').addEventListener('click', () => {
+        const dialog = shadow.querySelector('.dialog-box');
+        dialog.style.animation = 'none';
+        dialog.style.opacity = '0';
+        dialog.style.transform = 'translateX(-50%) scale(0.9) translateY(-10px)';
+        dialog.style.transition = 'all 0.2s cubic-bezier(0.2, 0, 0, 1)';
+
+        setTimeout(() => host.remove(), 200);
+    });
 
 })();
